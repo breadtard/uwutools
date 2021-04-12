@@ -20,6 +20,7 @@ yeet the `uwuplay` script into your PATH. If you're not sure what a PATH is, jus
 uwuplay [-f] <query>
 ```
 `[-f]` - Optional flag, if set, asks for custom mpv flags
+
 `<query>` - The query that uwuPlay should search for, example `dogs` will play the first video that comes up if you search for `dogs`
 
 ### License
