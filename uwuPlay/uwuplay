@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+########################
+# youtube video player #
+########################
+
+mpvflag="none"
+
+set -e
+shopt -s extglob
+
+while getopts "f" arg; do  # we detect if -f is set
+	echo "Enter custom MPV flags: "
+	read mpvflag
+done
+
+rawflags=$@                # terrible workaround to my stupidity
+
+case $mpvflag in
+	none )
+		query=$@
+		;;
+	* )
+		query=$(echo $rawflags | awk '{ $1=""; print}') # remove the -f from the query 
+		;;
+esac
+echo "Search query: $query"
+videoid=$(youtube-dl --skip-download ytsearch:"$query" | grep webpage | awk '{print substr($2, 1, length($2)-1)}')   # long complicateed mess to grab the videoid using youtube-dl
+echo "Video ID: $videoid"
+case $mpvflag in
+	none )
+		mpv https://youtu.be/$videoid
+		;;
+	* )
+		echo "Custom MPV Flags: $mpvflag"
+		mpv https://youtu.be/$videoid $mpvflag
+		;;
+esac
