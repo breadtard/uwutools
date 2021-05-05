@@ -24,6 +24,6 @@ uwuplay [-f] <query>
 `<query>` - The query that uwuPlay should search for, example `dogs` will play the first video that comes up if you search for `dogs`
 
 ### License
-uwuPlay is licensed under the Simplified Bread License. The license can be found in the `LICENSE` file in this repo.
+uwuPlay is licensed under 0BSD. go wild cowboy
 
 :wq
