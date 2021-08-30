@@ -8,6 +8,6 @@ uwuEdit is an awful text editor that Veikko wrote at night because who tf sleeps
 Because we need more uwuTools and easier to distrubute to the teacher.
 
 ### How do I use it?
-Tkinter is required. The package name is usually `python38-tk`. To run it `python3.8 /path/to/uwuEdit.py`.
+Python3.8 and tkinter are required. The package name is usually `python38-tk`. To install uwuEdit run the `install.sh` script. If you want to run it without installing it, run `./uwuEdit`.
 
 :wq
