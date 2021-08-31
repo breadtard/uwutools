@@ -1,2 +1,2 @@
 #!/bin/sh
-python3.8 /usr/share/uwuEdit/uwuEdit.py
+python3 /usr/share/uwuEdit/uwuEdit.py
