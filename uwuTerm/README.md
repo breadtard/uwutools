@@ -14,7 +14,16 @@ On diffrent distros: put the `uwuTerm` binary into /usr/bin, or see **compiling*
 
 ## Compiling
 
-to compile uwuTerm, download the source run this command:
-`gcc -O2 -Wall $(pkg-config --cflags vte-2.91) main.c -o term $(pkg-config --libs vte-2.91)` and then put the `term` binary into into /usr/bin, thats it!
+### With Meson
+to compile uwuterm with meson, run these commands:
+```bash
+meson build
+cd build
+meson compile
+```
+
+### Manually
+to compile uwuTerm manually, download the source run this command:
+`gcc -O2 -Wall $(pkg-config --cflags vte-2.91) main.c -o uwuterm $(pkg-config --libs vte-2.91)` and then put the `uwuterm` binary into /usr/bin, and thats it!
 
 :wq
