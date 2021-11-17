@@ -1,0 +1,338 @@
+#!/usr/bin/env bash
+## uwuLuks - LUKS Encrypted Loopback
+
+function usage() {
+    echo "uwuLuks - LUKS Encrypted Loopback Storage"
+    echo "Usage: uwuluks <action> <params>"
+    echo "Actions:"
+    echo "    -h, --help                       Show this"
+    echo "    -v, --version                    Show version"
+    echo "    -m, --mount <name> [mountpoint]  Mount LUKS encrypted loopback"
+    echo "    -u, --unmount <id>               Unmount LUKS encrypted loopback"
+    echo "    -d, --delete <name>              Delete LUKS encrypted loopback"
+    echo "    -c, --create <name> <size> [fs]  Create LUKS encrypted loopback"
+    echo "    -l, --list                       List LUKS encrypted loopbacks"
+    echo "        --unmount-unsafe <id>        Unsafely unmount LUKS encrypted loopback (Not recommended)"
+}
+
+function succ() {
+    export msg="$1"
+    # same as err(), but with a green color
+    echo -e "\e[32mSuccess:\e[0m $msg"
+    return 0 # return 0 to indicate success
+}
+
+function info() {
+    export msg="$1"
+    # same as err(), but with a blue color
+    echo -e "\e[34mInfo:\e[0m $msg"
+}
+
+function err() {
+    export msg="$1"
+    echo -e "\e[31mError:\e[0m $msg"
+    # if err_code is set, exit with that code
+    # else, dont exit
+    exit 1
+}
+
+function warn() {
+    export msg="$1"
+    # same as err(), but with a yellow color
+    echo -e "\e[33mWarning:\e[0m $msg"
+}
+
+function create_ll() {
+    # Create a LUKS encrypted loopback device
+    # <name> - Name of image
+    # <size> - Size of image in MB
+    # <fs> - Filesystem (optional)
+    # Valid filesystem options:
+    # - ext4 (default)
+    # - fat32
+    # - btrfs
+    # - exfat
+    # - custom
+	
+    export name="$1"
+    export size="$2"
+    export fs="$3"
+
+    # check if FS is specified
+    if [ -z "$fs" ]; then
+        fs="ext4"
+    fi
+
+    # check if FS is valid
+    if [ "$fs" != "ext4" ] && [ "$fs" != "fat32" ] && [ "$fs" != "btrfs" ] && [ "$fs" != "exfat" ]; then
+        err "Invalid filesystem: $fs" 1
+    fi
+    
+    # check if image already exists
+    if [ -f "$HOME/.local/share/lel/$name.img" ]; then
+        err "Image already exists: $name.img" 1
+    fi
+
+    # check if name is valid
+    # invalid characters: space, tab, newline, /, \
+    export regex_name="^[a-zA-Z0-9,.+=\-_]+"
+    if ! [ $name =~ $regex_name ]; then
+        err "Invalid character in name: $name. Valid names match this regex: $regex_name"
+        return 1
+    fi
+
+    export regex_size="^[1-9][0-9]+[KMGTP]?$"
+    # check if size is valid
+    # size must be a number, optionally followed by K,M,G,T (kb, mb, gb, tb)
+    if ! [ $size =~ $regex_size ]; then
+        err "Invalid size: $size" 1
+    fi
+
+    # create the image
+    # steps:
+    # 1. check if ~/.local/share/lel exists, if not, create it
+    # 2. cd to ~/.local/share/lel
+    # 3. truncate -s <size> <name>.img
+    # 4. cryptsetup luksFormat <name>.img
+    # 5. cryptsetup luksOpen <name>.img <name>
+    # 6. sudo mkfs.<fs> /dev/mapper/<name>
+    # 7. sudo mount /dev/mapper/<name> ~/.local/share/lel/<name>-mount
+    # 8. sudo chown -R $USER ~/.local/share/lel/<name>-mount
+    # 9. sudo chmod -R 700 ~/.local/share/lel/<name>-mount
+    # 10. sudo chmod -R 700 ~/.local/share/lel/<name>.img
+    # 11. echo "Created LUKS encrypted loopback device: $name.img (mountpoint: ~/.local/share/lel/<name>-mount"
+    # 12. done
+    
+
+    ## DEBUG ##
+    # set -x
+    ## DEBUG ##
+
+    if [ ! -d "$HOME/.local/share/lel" ]; then
+        mkdir -p "$HOME/.local/share/lel"
+    fi
+    cd "$HOME/.local/share/lel" 2> /dev/null || err "Failed to change directory to ~/.local/share/lel" 1
+    truncate -s "$size" "$name.img" 2> /dev/null || err "Failed to create image" 1
+    cryptsetup luksFormat "$name.img" 2> /dev/null || err "Failed to encrypt image" 1
+    sudo cryptsetup luksOpen "$name.img" "$name" 2> /dev/null || err "Failed to open image" 1
+
+    # if $fs is custom, ask for the custom fs command
+    if [ "$fs" == "custom" ]; then
+        info "Selected custom filesystem. Enter command to format the image (with \$name as the image)"
+        read -rp "> " fs_cmd
+    fi
+
+    # if $fs is not custom, use the default fs command
+    sudo mkfs."$fs" /dev/mapper/"$name" 2> /dev/null || err "Failed to create filesystem" 1
+
+    # if $fs is custom, use the custom fs command (if set)
+    if [ $fs == "custom" ]; then
+        eval "$fs_cmd" 2> /dev/null || err "Failed to format image" 1
+    fi
+    mkdir -p "$name"-mount
+    sudo mount /dev/mapper/"$name" "$name"-mount 2> /dev/null || err "Failed to mount filesystem" 1
+    sudo chown -R "$USER":"$USER" "$name"-mount 2> /dev/null || err "Failed to change ownership of mountpoint" 1
+    sudo chmod -R 700 "$name"-mount 2> /dev/null || err "Failed to change permissions of mountpoint" 1
+    sudo chmod -R 700 "$name".img 2> /dev/null || err "Failed to change permissions of image" 1
+    succ "Created LUKS encrypted loopback device: ~/.local/share/lel/$name.img (mountpoint: $HOME/.local/share/lel/$name-mount)"
+}
+
+function mount_ll() {
+    # Mount a LUKS encrypted loopback device
+    # <name> - Name of image
+    # <mountpoint> - Mountpoint (by default ~/.local/share/lel/<name>-mount)
+    # steps:
+    # 1. check if image exists
+    # 2. check if mountpoint is a directory
+    # 3. check if mountpoint is empty
+    # 4. check if mountpoint is already mounted
+    # 5. sudo cryptsetup luksOpen <name>.img <name>
+    # 6. sudo mount /dev/mapper/<name> <mountpoint>
+    # 7. succ "Mounted LUKS encrypted loopback device: $name.img (mountpoint: $mountpoint)"
+    # 8. done
+
+    export name="$1"
+    export mountpoint="$2"
+
+    if [ ! -f "$HOME/.local/share/lel/$name.img" ]; then
+        err "Image does not exist: $name.img" 1
+    fi
+    if [ ! -d "$mountpoint" ]; then
+        err "Mountpoint is not a directory: $mountpoint" 1
+    fi
+    if [ "$(ls -A "$mountpoint")" ]; then
+        err "Mountpoint is not empty: $mountpoint" 1
+    fi
+    # shellcheck disable=SC2143
+    if [ -n "$(mount | grep "$mountpoint")" ]; then
+        err "Mountpoint is already mounted: $mountpoint" 1
+    fi
+    sudo cryptsetup luksOpen "$HOME/.local/share/lel/$name.img" "$name" 2> /dev/null || err "Failed to open image" 1
+    sudo mount /dev/mapper/"$name" "$mountpoint" 2> /dev/null || err "Failed to mount image" 1
+    succ "Mounted LUKS encrypted loopback device: $name.img (mountpoint: $mountpoint)"
+}
+
+function delete_ll() {
+    # Delete a LUKS encrypted loopback device
+    # <name> - Name of image
+    # steps:
+    # 1. check if image exists
+    # 2. ask for confirmation
+    # 3. sudo umount ~/.local/share/lel/<name>-mount
+    # 4. sudo cryptsetup luksClose <name>
+    # 5. shred -fvz -n 10 ~/.local/share/lel/<name>.img    
+    # 5. rm ~/.local/share/lel/<name>.img
+    # 6. succ "Deleted LUKS encrypted loopback device: $name.img"
+    # 7. done
+
+    export name="$1"
+
+    if [ ! -f "$HOME/.local/share/lel/$name.img" ]; then
+        err "Image does not exist: $name.img" 1
+    fi
+    warn "Are you sure you want to delete $name? This action is not reversable!"
+    read -p "Confirmation [y/N]: " -n 1 -r
+    echo
+    if [ ! $REPLY =~ ^[Yy]$ ]; then
+        err "Aborted" 1
+    fi
+
+    # if image is mounted, run the below 2 commands
+    if [ -n "$(mount | grep "$HOME/.local/share/lel/$name-mount")" ]; then
+	sudo umount "$HOME/.local/share/lel/$name-mount" 2> /dev/null || err "Failed to unmount image" 1
+	sudo cryptsetup luksClose "$name" 2> /dev/null || err "Failed to close image" 1
+    fi
+
+    shred -fvz -n 10 "$HOME/.local/share/lel/$name.img" || warn "Failed to overwrite image for secure deletion"
+    rm "$HOME/.local/share/lel/$name.img" 2> /dev/null || err "Failed to delete image" 1
+    rmdir "$HOME/.local/share/lel/$name-mount" || warn "Failed to delete mountpoint"
+    succ "Deleted LUKS encrypted loopback device: $name.img"
+}
+
+function unmount_ll() {
+    # Unmount a LUKS encrypted loopback device
+    # <id> - either name of image or mountpoint
+    # steps:
+    # 1. check if id exists
+    # 2. sudo umount <id>
+    # 3. sudo cryptsetup luksClose <name>
+    # 4. succ "Unmounted LUKS encrypted loopback device: $id"
+    # 5. done
+
+    export id="$1"
+
+    if [ ! -f "$HOME/.local/share/lel/$id.img" ] && [ ! -d "$HOME/.local/share/lel/$id-mount" ]; then
+        err "Image or mountpoint does not exist: $id" 1
+    fi
+    sudo umount "$id" 2> /dev/null || err "Failed to unmount image" 1
+    sudo cryptsetup luksClose "$id" 2> /dev/null || err "Failed to close image" 1
+    succ "Unmounted LUKS encrypted loopback device: $id"
+}
+
+function unmount_unsafe() {
+    # Same as above, but unmount with `--lazy --force`
+    # asks for confirmation
+    # <id> - either name of image or mountpoint
+    # steps:
+    # 1. check if id exists
+    # 2. warn "Are you sure you want to unsafely unmount $id? This action may corrupt data!"
+    # 3. ask for confirmation
+    # 4. info "Unsafely unmounting $id"
+    # 5. sudo umount --lazy --force <id>
+    # 6. sudo cryptsetup luksClose <name>
+    # 7. succ "Unmounted LUKS encrypted loopback device: $id"
+    # 8. done
+
+    export id="$1"
+
+    if [ ! -f "$HOME/.local/share/lel/$id.img" ] && [ ! -d "$HOME/.local/share/lel/$id-mount" ]; then
+        err "Image or mountpoint does not exist: $id" 1
+    fi
+    warn "Are you sure you want to unsafely unmount $id? This action may corrupt data!"
+    read -p "Confirmation [y/N]: " -n 1 -r
+    echo
+    if [ ! $REPLY =~ ^[Yy]$ ]; then
+        err "Aborted" 1
+    fi
+    info "Unsafely unmounting $id"
+    sudo umount --lazy --force "$id" 2> /dev/null || err "Failed to unmount image" 1
+    sudo cryptsetup luksClose "$id" 2> /dev/null || err "Failed to close image" 1
+    succ "Unmounted LUKS encrypted loopback device: $id"
+}
+
+function list_ll() {
+    # List all LEL images
+    # only print images matching this regex:
+    # /^.+\.img$/gm
+    # steps:
+    # 1. cd ~/.local/share/lel
+    # 2. find . -regex '^.+\.img$' | sed -e 's+./++g
+    # 3. done
+    cd "$HOME/.local/share/lel" 2> /dev/null || err "Failed to change to directory: $HOME/.local/share/lel" 1
+    info "All LEL images:"
+    find . -regex '^.+\.img$' | sed -e 's+./++g'
+}
+
+## Main
+# Check for arguments
+# If no arguments are given, print usage()
+# If arguments are given, check if they are valid
+# If arguments are valid, call the appropriate function
+# If arguments are invalid, print `err "Invalid argument"` and then usage()
+# valid arguments:
+#   -h, --help
+#   -v, --version
+#   -m, --mount <name> [mountpoint]
+#   -u, --unmount <id>
+#   -d, --delete <name>
+#   -c, --create <name> <size> [fs]
+#   -l, --list
+#       --unmount-unsafe <id>
+if [ "$#" -eq 0 ]; then
+    usage
+elif [ "$#" -eq 1 ]; then
+    case "$1" in
+        -h|--help)
+            usage
+            ;;
+        -v|--version)
+	    export VERSION="0.1.1-github"
+            info "uwuLuks - LUKS Encrypted Loopback Storage"
+            info "Version: $VERSION"
+            info "Author: Breadtard#1937"
+	    info "Source: https://github.com/breadtard/uwuTools/"
+            ;;
+        -l|--list)
+            list_ll
+            ;;
+        *)
+            err "Invalid or missing argument"
+            usage
+            ;;
+    esac
+elif [ "$#" -ge 2 ]; then
+    case "$1" in
+        -m|--mount)
+            mount_ll "$2" "$3"
+            ;;
+        -u|--unmount)
+            unmount_ll "$2"
+            ;;
+        -d|--delete)
+            delete_ll "$2"
+            ;;
+        -c|--create)
+            create_ll "$2" "$3" "$4"
+            ;;
+        --unmount-unsafe)
+            unmount_unsafe "$2"
+            ;;
+        *)
+            err "Invalid argument"
+            usage
+            ;;
+    esac
+else
+    err "Invalid argument"
+    usage
+fi
