@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 ## uwuLuks - LUKS Encrypted Loopback
 
+## debug check
+# if UWU_DEBUG is set in the environment, then debug mode is enabled
+if [[ -n "$UWU_DEBUG" ]]; then
+  set -x
+fi
+
 function usage() {
     echo "uwuLuks - LUKS Encrypted Loopback Storage"
     echo "Usage: uwuluks <action> <params>"
@@ -16,29 +22,28 @@ function usage() {
 }
 
 function succ() {
+    # err() but green
     export msg="$1"
-    # same as err(), but with a green color
     echo -e "\e[32mSuccess:\e[0m $msg"
-    return 0 # return 0 to indicate success
+    return 0 
 }
 
 function info() {
+    # err() but blue
     export msg="$1"
-    # same as err(), but with a blue color
     echo -e "\e[34mInfo:\e[0m $msg"
 }
 
 function err() {
+    # Show error message and exit
     export msg="$1"
     echo -e "\e[31mError:\e[0m $msg"
-    # if err_code is set, exit with that code
-    # else, dont exit
     exit 1
 }
 
 function warn() {
+    # err() but yellow
     export msg="$1"
-    # same as err(), but with a yellow color
     echo -e "\e[33mWarning:\e[0m $msg"
 }
 
@@ -50,6 +55,9 @@ function create_ll() {
     # Valid filesystem options:
     # - ext4 (default)
     # - fat32
+    # - xfs
+    # - f2fs
+    # - ntfs
     # - btrfs
     # - exfat
     # - custom
@@ -64,7 +72,7 @@ function create_ll() {
     fi
 
     # check if FS is valid
-    if [ "$fs" != "ext4" ] && [ "$fs" != "fat32" ] && [ "$fs" != "btrfs" ] && [ "$fs" != "exfat" ]; then
+    if [ "$fs" != "ext4" ] && [ "$fs" != "fat32" ] && [ "$fs" != "btrfs" ] && [ "$fs" != "exfat" ] && [ "$fs" != "xfs" ] && [ "$fs" != "f2fs" ] && [ "$fs" != "ntfs" ]; then 
         err "Invalid filesystem: $fs" 1
     fi
     
@@ -75,38 +83,34 @@ function create_ll() {
 
     # check if name is valid
     # invalid characters: space, tab, newline, /, \
-    export regex_name="^[a-zA-Z0-9,.+=\-_]+"
-    if ! [ $name =~ $regex_name ]; then
-        err "Invalid character in name: $name. Valid names match this regex: $regex_name"
-        return 1
+    export $name=$(echo "$name" | sed -e 's/[ \t\n\/\\]//g')
+    if [ -z "$name" ]; then
+	err "Invalid name: $name"
     fi
 
-    export regex_size="^[1-9][0-9]+[KMGTP]?$"
+    ###
+    # This *should* check if the size is valid,
+    # but for whatever reason, it doesn't.
+    # therefore, we dont check anything.
+    # If it's not valid, it will fail later anyways.
+    # If it breaks, it breaks. Its the user's fault.
+    ###
+
+    #export regex_size="^[1-9][0-9]+[KMGTP]?$"
     # check if size is valid
-    # size must be a number, optionally followed by K,M,G,T (kb, mb, gb, tb)
-    if ! [ $size =~ $regex_size ]; then
-        err "Invalid size: $size" 1
-    fi
+    #if ! [[ "$size" =~ "$regex_size" ]]; then
+    #	err "Invalid size: $size"
+    #fi
+
 
     # create the image
-    # steps:
-    # 1. check if ~/.local/share/lel exists, if not, create it
-    # 2. cd to ~/.local/share/lel
-    # 3. truncate -s <size> <name>.img
-    # 4. cryptsetup luksFormat <name>.img
-    # 5. cryptsetup luksOpen <name>.img <name>
-    # 6. sudo mkfs.<fs> /dev/mapper/<name>
-    # 7. sudo mount /dev/mapper/<name> ~/.local/share/lel/<name>-mount
-    # 8. sudo chown -R $USER ~/.local/share/lel/<name>-mount
-    # 9. sudo chmod -R 700 ~/.local/share/lel/<name>-mount
-    # 10. sudo chmod -R 700 ~/.local/share/lel/<name>.img
-    # 11. echo "Created LUKS encrypted loopback device: $name.img (mountpoint: ~/.local/share/lel/<name>-mount"
-    # 12. done
-    
-
-    ## DEBUG ##
-    # set -x
-    ## DEBUG ##
+    info "Creating image: $name.img"
+    info "Size: $size"
+    info "Filesystem: $fs"
+    if [ "$fs" == "ntfs" ]; then
+	    warn "NTFS may or may not work. Please test."
+	    read -rp "Press any key to continue..."
+    fi
 
     if [ ! -d "$HOME/.local/share/lel" ]; then
         mkdir -p "$HOME/.local/share/lel"
@@ -131,6 +135,8 @@ function create_ll() {
     fi
     mkdir -p "$name"-mount
     sudo mount /dev/mapper/"$name" "$name"-mount 2> /dev/null || err "Failed to mount filesystem" 1
+
+    # fix permissions
     sudo chown -R "$USER":"$USER" "$name"-mount 2> /dev/null || err "Failed to change ownership of mountpoint" 1
     sudo chmod -R 700 "$name"-mount 2> /dev/null || err "Failed to change permissions of mountpoint" 1
     sudo chmod -R 700 "$name".img 2> /dev/null || err "Failed to change permissions of image" 1
@@ -141,15 +147,6 @@ function mount_ll() {
     # Mount a LUKS encrypted loopback device
     # <name> - Name of image
     # <mountpoint> - Mountpoint (by default ~/.local/share/lel/<name>-mount)
-    # steps:
-    # 1. check if image exists
-    # 2. check if mountpoint is a directory
-    # 3. check if mountpoint is empty
-    # 4. check if mountpoint is already mounted
-    # 5. sudo cryptsetup luksOpen <name>.img <name>
-    # 6. sudo mount /dev/mapper/<name> <mountpoint>
-    # 7. succ "Mounted LUKS encrypted loopback device: $name.img (mountpoint: $mountpoint)"
-    # 8. done
 
     export name="$1"
     export mountpoint="$2"
@@ -175,15 +172,6 @@ function mount_ll() {
 function delete_ll() {
     # Delete a LUKS encrypted loopback device
     # <name> - Name of image
-    # steps:
-    # 1. check if image exists
-    # 2. ask for confirmation
-    # 3. sudo umount ~/.local/share/lel/<name>-mount
-    # 4. sudo cryptsetup luksClose <name>
-    # 5. shred -fvz -n 10 ~/.local/share/lel/<name>.img    
-    # 5. rm ~/.local/share/lel/<name>.img
-    # 6. succ "Deleted LUKS encrypted loopback device: $name.img"
-    # 7. done
 
     export name="$1"
 
@@ -193,7 +181,7 @@ function delete_ll() {
     warn "Are you sure you want to delete $name? This action is not reversable!"
     read -p "Confirmation [y/N]: " -n 1 -r
     echo
-    if [ ! $REPLY =~ ^[Yy]$ ]; then
+    if [ ! $REPLY == "y" ] && [ ! $REPLY == "Y" ]; then
         err "Aborted" 1
     fi
 
@@ -213,11 +201,6 @@ function unmount_ll() {
     # Unmount a LUKS encrypted loopback device
     # <id> - either name of image or mountpoint
     # steps:
-    # 1. check if id exists
-    # 2. sudo umount <id>
-    # 3. sudo cryptsetup luksClose <name>
-    # 4. succ "Unmounted LUKS encrypted loopback device: $id"
-    # 5. done
 
     export id="$1"
 
@@ -233,15 +216,6 @@ function unmount_unsafe() {
     # Same as above, but unmount with `--lazy --force`
     # asks for confirmation
     # <id> - either name of image or mountpoint
-    # steps:
-    # 1. check if id exists
-    # 2. warn "Are you sure you want to unsafely unmount $id? This action may corrupt data!"
-    # 3. ask for confirmation
-    # 4. info "Unsafely unmounting $id"
-    # 5. sudo umount --lazy --force <id>
-    # 6. sudo cryptsetup luksClose <name>
-    # 7. succ "Unmounted LUKS encrypted loopback device: $id"
-    # 8. done
 
     export id="$1"
 
@@ -251,7 +225,7 @@ function unmount_unsafe() {
     warn "Are you sure you want to unsafely unmount $id? This action may corrupt data!"
     read -p "Confirmation [y/N]: " -n 1 -r
     echo
-    if [ ! $REPLY =~ ^[Yy]$ ]; then
+    if [ ! $REPLY == "y" ] && [ ! $REPLY == "Y" ]; then
         err "Aborted" 1
     fi
     info "Unsafely unmounting $id"
@@ -264,30 +238,14 @@ function list_ll() {
     # List all LEL images
     # only print images matching this regex:
     # /^.+\.img$/gm
-    # steps:
-    # 1. cd ~/.local/share/lel
-    # 2. find . -regex '^.+\.img$' | sed -e 's+./++g
-    # 3. done
+
     cd "$HOME/.local/share/lel" 2> /dev/null || err "Failed to change to directory: $HOME/.local/share/lel" 1
     info "All LEL images:"
     find . -regex '^.+\.img$' | sed -e 's+./++g'
 }
 
 ## Main
-# Check for arguments
-# If no arguments are given, print usage()
-# If arguments are given, check if they are valid
-# If arguments are valid, call the appropriate function
-# If arguments are invalid, print `err "Invalid argument"` and then usage()
-# valid arguments:
-#   -h, --help
-#   -v, --version
-#   -m, --mount <name> [mountpoint]
-#   -u, --unmount <id>
-#   -d, --delete <name>
-#   -c, --create <name> <size> [fs]
-#   -l, --list
-#       --unmount-unsafe <id>
+
 if [ "$#" -eq 0 ]; then
     usage
 elif [ "$#" -eq 1 ]; then
@@ -296,7 +254,7 @@ elif [ "$#" -eq 1 ]; then
             usage
             ;;
         -v|--version)
-	    export VERSION="0.1.1-github"
+	    export VERSION="0.1.2-github"
             info "uwuLuks - LUKS Encrypted Loopback Storage"
             info "Version: $VERSION"
             info "Author: Breadtard#1937"

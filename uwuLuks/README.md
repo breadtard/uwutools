@@ -40,4 +40,4 @@ $ uwuluks -h
 It would be awesome if you tested this for edge-cases, other filesystems, etc, mainly because i use regex here, and regex hard.
 
 ## TODO
-- add xfs, f2fs, zfs, etc
+- see if ntfs works. didnt try yet.
