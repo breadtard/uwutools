@@ -1,3 +1,8 @@
+## Deprecation Notice
+### uwuTerm will be rewritten soon. this version will be known as uwuterm1, the new version will be uwuterm2
+### uwuTerm1 wont recieve updates, while uwuterm2 will be a *full* rewrite in python.
+
+
 # uwuTerm
 ## an awful terminal emulator, made in C
 
