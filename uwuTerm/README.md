@@ -14,23 +14,31 @@ no idea
 ### Why are you putting it on github then?
 because some guy in a discord server asked me lol
 
-### How do i install it?
-On arch: `makepkg -si`
-
-On diffrent distros: put the `uwuTerm` binary into /usr/bin, or see **compiling**
-
 ## Compiling
 
-### With Meson
-to compile uwuterm with meson, run these commands:
+### With MkAll
+to compile uwuTerm using MkAll, cd up one dir and run `bash mkall.sh`.
 ```bash
-meson build
-cd build
-meson compile
+$ cd ..
+$ bash mkall.sh
+MkAll: Cleaning uwuCalc
+MkAll: uwuCalc isn't C, skipping
+MkAll: Cleaning uwuEdit
+MkAll: uwuEdit isn't C, skipping
+MkAll: Cleaning uwuLuks
+MkAll: uwuLuks isn't C, skipping
+MkAll: Cleaning uwuPlay
+MkAll: uwuPlay isn't C, skipping
+MkAll: Cleaning uwuTerm
+  CC	main.c
+MkAll: uwuTerm done
 ```
+and bam now uwuterm is compiled, right here in this dir
 
 ### Manually
-to compile uwuTerm manually, download the source run this command:
-`gcc -O2 -Wall $(pkg-config --cflags vte-2.91) main.c -o uwuterm $(pkg-config --libs vte-2.91)` and then put the `uwuterm` binary into /usr/bin, and thats it!
+you know how this works probably
+`gcc -O2 -Wall $(pkg-config --cflags vte-2.91) main.c -o uwuterm $(pkg-config --libs vte-2.91)`
+
+
 
 :wq

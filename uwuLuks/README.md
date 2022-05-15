@@ -1,3 +1,7 @@
+# HEY THIS DOESNT WORK ITS SHIT DONT USE IT
+Yeah this brokey, it doesnt work, never did, its untested, gonna be removed soon.
+
+## Original Readme:
 # uwuLuks
 [![forthebadge](https://forthebadge.com/images/badges/you-didnt-ask-for-this.svg)](https://forthebadge.com) [![forthebadge](https://forthebadge.com/images/badges/fuck-it-ship-it.svg)](https://forthebadge.com)
 

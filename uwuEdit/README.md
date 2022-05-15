@@ -8,6 +8,6 @@ uwuEdit is an awful text editor that Veikko wrote at night because who tf sleeps
 Because we need more uwuTools and easier to distrubute to the teacher.
 
 ### How do I use it?
-Python and tkinter are required. To install tkinter, run `pip install tk`. To install uwuEdit run the `install.sh` script. If you want to run it without installing it, run `./uwuEdit`.
+Python and tkinter are required. To install tkinter, run `pip install tk`. To run uwuEdit, run `./uwuEdit.py`
 
 :wq
