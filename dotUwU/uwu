@@ -1,0 +1,82 @@
+#!/bin/bash
+pack() {
+	INDATA="$1"
+	OUTFILE="$2"
+	echo -n "$INDATA: "
+	OUTDATA="$(echo "$INDATA"):$(cat "$INDATA" | base64 -w0 | sed -e "s/ //g")"
+	echo "$OUTDATA" >> "$OUTFILE"
+	printf "\e[1;32mok\e[0m\n"
+}
+
+unpack() {
+	INDATA="$1"
+	if [[ ! "$INDATA" =~ ^(.*:.*)$ ]]; then
+		FILENAME=$LASTFILE
+		echo "$INDATA" | base64 -d >> "$FILENAME"
+		return
+	fi
+	FILENAME="$(echo "$INDATA" | awk -F ':' '{print $1}')"
+	if [[ -e "$FILENAME" ]]; then
+		read -rp "File "$FILENAME" already exists, replace? (y/N) " conf
+		case $conf in
+			y|Y|yes|YES|Yes) rm "$FILENAME" ;;
+			*) return 3 ;;
+		esac
+	fi
+	echo -n "$FILENAME: "
+	mkdir -p "$FILENAME"
+	rm -rf "$FILENAME"
+	echo "$INDATA" | awk -F ':' '{print $2}' | base64 -d > "$FILENAME"
+	printf "\e[1;32mok\e[0m\n"
+	export LASTFILE=$FILENAME
+}
+
+usage() {
+	echo "uwu - shitty tar clone in bash"
+	echo "Usage:"
+	echo "    uwu <c|-c|--create> <output file> <input files/dirs> - create an archive from input files"
+	echo "    uwu <x|-x|--extract> <input file>                    - extract archive"
+	echo "    uwu <h|-h|-?|/?|--help>                              - shows help (this)"
+	echo "    uwu <l|-l|--list> <input file>                       - show archive contents"
+	echo "    uwu <a|-a|--append> <output file> <input files/dirs> - append to archive (-c but doesnt delete archive if it exists)"
+	echo ""
+	echo "Copyright (C) 2022, Breadtard. Licensed under WTFPL+N"
+}
+
+case "$1" in
+	c|-c|--create)
+		if [[ -f $2 ]]; then rm "$2"; fi
+		for i in "${@:3}"; do
+			for j in $(find "$i" -type f); do
+				pack "$j" "$2"
+			done
+		done
+		;;
+	a|-a|--append)
+		for i in "${@:3}"; do
+			for j in $(find "$i" -type f); do
+				pack "$j" "$2"
+			done
+		done
+		;;
+	x|-x|--extract)
+		for i in $(cat "$2"); do
+			unpack "$i"
+		done
+		;;
+	l|-l|--list)
+		echo "File: $2"
+		for i in $(seq `tput cols`); do echo -n "-"; done && echo ""
+		for i in $(cat "$2"); do
+			if [[ ! "$i" =~ ^(.*:.*)$ ]]; then continue; fi
+			echo "$i" | awk -F':' '{print $1}'
+		done
+		;;
+	h|-h|-\?|/\?|--help)
+		usage
+		;;
+	*)
+		echo "Unknown command"
+		usage
+		;;
+esac
